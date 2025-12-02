@@ -7,10 +7,10 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import { Label } from '$lib/components/ui/label';
-	import type { RecordModel } from 'pocketbase';
+	import type { MessagesResponse, UsersResponse } from '../../pocketbase-types';
 
 	let currentUser = $state(pb.authStore.model);
-	let messages = $state<RecordModel[]>([]);
+	let messages = $state<MessagesResponse<{ user: UsersResponse }>[]>([]);
 	let newMessage = $state('');
 	let isLogin = $state(true);
 	let email = $state('');
@@ -21,9 +21,10 @@
 	let scrollViewport: HTMLElement | undefined = $state(undefined);
 	let page = 1;
 	let hasMore = true;
-	let isLoadingMore = false;
+	let isLoadingMore = $state(false);
 
 	onMount(async () => {
+
 		pb.authStore.onChange(() => {
 			currentUser = pb.authStore.model;
 		});
@@ -45,7 +46,7 @@
 				sort: '-created',
 				expand: 'user'
 			});
-			messages = result.items.reverse();
+			messages = result.items.reverse() as unknown as MessagesResponse<{ user: UsersResponse }>[];
 			hasMore = result.totalPages > 1;
 			scrollToBottom();
 		} catch (e) {
@@ -65,7 +66,9 @@
 			});
 
 			if (result.items.length > 0) {
-				const newMessages = result.items.reverse();
+				const newMessages = result.items.reverse() as unknown as MessagesResponse<{
+					user: UsersResponse;
+				}>[];
 				messages = [...newMessages, ...messages];
 				page++;
 				hasMore = result.page < result.totalPages;
@@ -94,9 +97,11 @@
 	async function subscribe() {
 		pb.collection('messages').subscribe('*', async ({ action, record }) => {
 			if (action === 'create') {
-				const user = await pb.collection('users').getOne(record.user);
-				record.expand = { user };
-				messages = [...messages, record];
+				const user = await pb.collection('users').getOne(record.user[0]);
+				const expandedRecord = { ...record, expand: { user } } as unknown as MessagesResponse<{
+					user: UsersResponse;
+				}>;
+				messages = [...messages, expandedRecord];
 				scrollToBottom();
 			}
 			if (action === 'delete') {
@@ -232,7 +237,7 @@
 							</div>
 						{/if}
 						{#each messages as message (message.id)}
-							{@const isMe = message.user === currentUser.id}
+							{@const isMe = message.user.includes(currentUser.id)}
 							<div class={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
 								<div class={`flex max-w-[80%] gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
 									<Avatar.Root class="h-8 w-8">
