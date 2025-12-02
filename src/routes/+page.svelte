@@ -97,7 +97,8 @@
 	async function subscribe() {
 		pb.collection('messages').subscribe('*', async ({ action, record }) => {
 			if (action === 'create') {
-				const user = await pb.collection('users').getOne(record.user[0]);
+				const userId = Array.isArray(record.user) ? record.user[0] : record.user;
+				const user = await pb.collection('users').getOne(userId);
 				const expandedRecord = { ...record, expand: { user } } as unknown as MessagesResponse<{
 					user: UsersResponse;
 				}>;
